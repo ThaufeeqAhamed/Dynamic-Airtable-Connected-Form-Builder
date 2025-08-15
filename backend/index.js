@@ -215,7 +215,9 @@ app.post('/api/forms/:formId/submit', async (req, res) => {
     const { formId } = req.params;
     const submissionData = req.body;
     const form = await Form.findById(formId);
-    if (!form) return res.status(404).json({ message: 'Form not found' });
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found' });
+    }
     const accessToken = await getAirtableToken(form.creatorId);
     const airtablePayload = { fields: submissionData };
     const url = `https://api.airtable.com/v0/${form.airtableBaseId}/${form.airtableTableId}`;
