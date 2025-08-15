@@ -22,7 +22,6 @@ app.use(cors());
 app.use(express.json());
 
 // --- Helper Functions ---
-
 function base64URLEncode(str) {
   return str.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
@@ -30,63 +29,53 @@ function sha256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest();
 }
 
-// UPGRADED HELPER FUNCTION WITH TOKEN REFRESH LOGIC
+// Token refresh logic
 const getAirtableToken = async (userId) => {
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
 
   try {
-    // 1. Proactively check if the token is still valid by making a lightweight API call.
     await axios.get('https://api.airtable.com/v0/meta/whoami', {
       headers: { 'Authorization': `Bearer ${user.accessToken}` },
     });
-    // If the call succeeds, the token is valid.
     return user.accessToken;
   } catch (error) {
-    // 2. If the call fails with a 401 Unauthorized error, the token has likely expired.
     if (error.response && error.response.status === 401) {
       console.log('Access token expired. Refreshing token...');
       try {
-        // 3. Use the refresh token to get a new access token.
-        const tokenResponse = await axios.post('https://airtable.com/oauth2/v1/token', {
-          grant_type: 'refresh_token',
-          refresh_token: user.refreshToken,
-        }, {
-          headers: {
-            'Authorization': `Basic ${Buffer.from(`${process.env.AIRTABLE_CLIENT_ID}:${process.env.AIRTABLE_CLIENT_SECRET}`).toString('base64')}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        });
+        const tokenResponse = await axios.post('https://airtable.com/oauth2/v1/token',
+          new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: user.refreshToken,
+          }),
+          {
+            headers: {
+              'Authorization': `Basic ${Buffer.from(`${process.env.AIRTABLE_CLIENT_ID}:${process.env.AIRTABLE_CLIENT_SECRET}`).toString('base64')}`,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          }
+        );
 
         const { access_token: newAccessToken } = tokenResponse.data;
-        
-        // 4. Update the user's record in the database with the new token.
         user.accessToken = newAccessToken;
         await user.save();
         console.log('Token refreshed and updated in DB.');
-
-        // 5. Return the new, valid access token.
         return newAccessToken;
       } catch (refreshError) {
         console.error('Failed to refresh token:', refreshError.response ? refreshError.response.data : refreshError.message);
         throw new Error('Could not refresh authentication token.');
       }
     }
-    // For other errors, re-throw them.
     throw error;
   }
 };
 
 const sanitizeText = (text) => {
-  if (text === null || typeof text === 'undefined') {
-    return '';
-  }
+  if (text === null || typeof text === 'undefined') return '';
   return String(text).replace(/[^\u0000-\u00FF]/g, "?");
 };
 
-
-// --- AUTHENTICATION ROUTES ---
-
+// --- AUTH ROUTES ---
 app.get('/api/auth/airtable', (req, res) => {
   const state = crypto.randomBytes(16).toString('hex');
   const codeVerifier = base64URLEncode(crypto.randomBytes(32));
@@ -95,7 +84,7 @@ app.get('/api/auth/airtable', (req, res) => {
 
   const authorizationUrl = new URL('https://airtable.com/oauth2/v1/authorize');
   authorizationUrl.searchParams.set('client_id', process.env.AIRTABLE_CLIENT_ID);
-  authorizationUrl.searchParams.set('redirect_uri', `http://localhost:${PORT}/api/auth/airtable/callback`);
+  authorizationUrl.searchParams.set('redirect_uri', process.env.OAUTH_REDIRECT_URI);
   authorizationUrl.searchParams.set('response_type', 'code');
   authorizationUrl.searchParams.set('scope', 'data.records:read data.records:write schema.bases:read user.email:read');
   authorizationUrl.searchParams.set('state', state);
@@ -115,17 +104,20 @@ app.get('/api/auth/airtable/callback', async (req, res) => {
   delete sessionStore[state];
 
   try {
-    const tokenResponse = await axios.post('https://airtable.com/oauth2/v1/token', {
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: `http://localhost:${PORT}/api/auth/airtable/callback`,
-      code_verifier: codeVerifier,
-    }, {
-      headers: {
-        'Authorization': `Basic ${Buffer.from(`${process.env.AIRTABLE_CLIENT_ID}:${process.env.AIRTABLE_CLIENT_SECRET}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
+    const tokenResponse = await axios.post('https://airtable.com/oauth2/v1/token',
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: process.env.OAUTH_REDIRECT_URI,
+        code_verifier: codeVerifier,
+      }),
+      {
+        headers: {
+          'Authorization': `Basic ${Buffer.from(`${process.env.AIRTABLE_CLIENT_ID}:${process.env.AIRTABLE_CLIENT_SECRET}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
 
     const { access_token, refresh_token } = tokenResponse.data;
 
@@ -141,7 +133,7 @@ app.get('/api/auth/airtable/callback', async (req, res) => {
       { new: true, upsert: true }
     );
 
-    res.redirect(`http://localhost:5173?userId=${user._id}`);
+    res.redirect(`${process.env.FRONTEND_URL}?userId=${user._id}`);
   } catch (error) {
     console.error('Error during authentication:', error.response ? error.response.data : error.message);
     res.status(500).send('An error occurred during authentication.');
@@ -151,18 +143,14 @@ app.get('/api/auth/airtable/callback', async (req, res) => {
 app.get('/api/users/:id', async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-accessToken -refreshToken');
-    if (user) {
-      res.json(user);
-    } else {
-      res.status(404).json({ message: 'User not found' });
-    }
+    if (user) res.json(user);
+    else res.status(404).json({ message: 'User not found' });
   } catch (error) {
     res.status(500).json({ message: 'Server Error' });
   }
 });
 
-// --- AIRTABLE PROXY ROUTES ---
-
+// --- AIRTABLE ROUTES ---
 app.get('/api/airtable/bases/:userId', async (req, res) => {
   try {
     const accessToken = await getAirtableToken(req.params.userId);
@@ -188,9 +176,7 @@ app.get('/api/airtable/tables/:userId/:baseId', async (req, res) => {
   }
 });
 
-
-// --- FORM MANAGEMENT ROUTES ---
-
+// --- FORM ROUTES ---
 app.post('/api/forms', async (req, res) => {
   try {
     const { formName, creatorId, airtableBaseId, airtableTableId, questions } = req.body;
@@ -217,9 +203,7 @@ app.get('/api/forms/user/:userId', async (req, res) => {
 app.get('/api/forms/:formId', async (req, res) => {
   try {
     const form = await Form.findById(req.params.formId);
-    if (!form) {
-      return res.status(404).json({ message: 'Form not found' });
-    }
+    if (!form) return res.status(404).json({ message: 'Form not found' });
     res.json(form);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch form' });
@@ -231,9 +215,7 @@ app.post('/api/forms/:formId/submit', async (req, res) => {
     const { formId } = req.params;
     const submissionData = req.body;
     const form = await Form.findById(formId);
-    if (!form) {
-      return res.status(404).json({ message: 'Form not found' });
-    }
+    if (!form) return res.status(404).json({ message: 'Form not found' });
     const accessToken = await getAirtableToken(form.creatorId);
     const airtablePayload = { fields: submissionData };
     const url = `https://api.airtable.com/v0/${form.airtableBaseId}/${form.airtableTableId}`;
@@ -251,13 +233,12 @@ app.post('/api/forms/:formId/submit', async (req, res) => {
   }
 });
 
-// --- PDF EXPORT ROUTE ---
-
+// --- PDF EXPORT ---
 app.get('/api/forms/:formId/responses/pdf', async (req, res) => {
   try {
     const { formId } = req.params;
     const form = await Form.findById(formId);
-    if (!form) { return res.status(404).json({ message: 'Form not found' }); }
+    if (!form) return res.status(404).json({ message: 'Form not found' });
 
     const accessToken = await getAirtableToken(form.creatorId);
     const url = `https://api.airtable.com/v0/${form.airtableBaseId}/${form.airtableTableId}`;
@@ -281,8 +262,8 @@ app.get('/api/forms/:formId/responses/pdf', async (req, res) => {
 
         for (const fieldName in record.fields) {
           if (y < 50) {
-             page = pdfDoc.addPage();
-             y = height - 50;
+            page = pdfDoc.addPage();
+            y = height - 50;
           }
           const fieldValue = record.fields[fieldName];
           const line = `${sanitizeText(fieldName)}: ${sanitizeText(fieldValue)}`;
@@ -292,7 +273,7 @@ app.get('/api/forms/:formId/responses/pdf', async (req, res) => {
         y -= 10;
       }
     } else {
-        page.drawText('No responses found for this form.', { x: 50, y, font, size: fontSize, color: rgb(0, 0, 0) });
+      page.drawText('No responses found for this form.', { x: 50, y, font, size: fontSize, color: rgb(0, 0, 0) });
     }
 
     const pdfBytes = await pdfDoc.save();
@@ -307,7 +288,6 @@ app.get('/api/forms/:formId/responses/pdf', async (req, res) => {
   }
 });
 
-
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });

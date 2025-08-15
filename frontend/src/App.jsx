@@ -5,7 +5,7 @@ import "./App.css";
 
 // This line reads the backend URL from your .env file
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+  import.meta.env.VITE_API_BASE_URL;
 
 // --- Helper Components & Icons ---
 const EditIcon = () => (
