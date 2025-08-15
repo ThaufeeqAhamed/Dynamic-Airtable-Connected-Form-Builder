@@ -10,8 +10,8 @@ A **full-stack MERN** application built as a technical assignment that lets user
 ---
 
 ## 🚀 Live Demo
-**Frontend:** [Deployed Here](#)  
-**Backend:** [Deployed Here](#)  
+**Frontend:** [https://dynamic-airtable-connected-form-bui.vercel.app](#)  
+**Backend:** [https://dynamic-airtable-connected-form-builder.onrender.com](#)  
 
 > Replace these with your Vercel/Render deployment links after going live.
 
