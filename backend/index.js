@@ -29,7 +29,12 @@ function sha256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest();
 }
 
-// Token refresh logic
+const sanitizeText = (text) => {
+  if (text === null || typeof text === 'undefined') return '';
+  return String(text).replace(/[^\u0000-\u00FF]/g, "?");
+};
+
+// --- Token refresh logic ---
 const getAirtableToken = async (userId) => {
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
@@ -68,11 +73,6 @@ const getAirtableToken = async (userId) => {
     }
     throw error;
   }
-};
-
-const sanitizeText = (text) => {
-  if (text === null || typeof text === 'undefined') return '';
-  return String(text).replace(/[^\u0000-\u00FF]/g, "?");
 };
 
 // --- AUTH ROUTES ---
@@ -218,29 +218,36 @@ app.post('/api/forms/:formId/submit', async (req, res) => {
     if (!form) {
       return res.status(404).json({ message: 'Form not found' });
     }
-
     const accessToken = await getAirtableToken(form.creatorId);
 
-    // ✅ Fix attachment formatting here
+    // ✅ FIX: Always format attachments properly
     const airtableFields = {};
     for (const key in submissionData) {
-      if (Array.isArray(submissionData[key])) {
-        airtableFields[key] = submissionData[key].map((item) =>
-          typeof item === "string" ? { url: item } : item
-        );
+      const value = submissionData[key];
+
+      if (Array.isArray(value)) {
+        airtableFields[key] = value.map((item) => {
+          if (typeof item === "string") {
+            return { url: item };
+          } else if (item && typeof item === "object" && item.url) {
+            return item;
+          }
+          return null;
+        }).filter(Boolean);
       } else if (
-        typeof submissionData[key] === "string" &&
+        typeof value === "string" &&
         (key.toLowerCase().includes("attachment") || key.toLowerCase().includes("logo"))
       ) {
-        airtableFields[key] = [{ url: submissionData[key] }];
+        airtableFields[key] = [{ url: value }];
+      } else if (value && typeof value === "object" && value.url) {
+        airtableFields[key] = [value];
       } else {
-        airtableFields[key] = submissionData[key];
+        airtableFields[key] = value;
       }
     }
 
-    const airtablePayload = { fields: airtableFields };
     const url = `https://api.airtable.com/v0/${form.airtableBaseId}/${form.airtableTableId}`;
-    await axios.post(url, airtablePayload, {
+    await axios.post(url, { fields: airtableFields }, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
