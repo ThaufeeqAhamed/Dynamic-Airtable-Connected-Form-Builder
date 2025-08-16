@@ -3,7 +3,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import "./App.css"; // Make sure to import the CSS file
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+// ✅ NEW: React Router + pages
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // --- Helper Components & Icons ---
 const EditIcon = () => (
@@ -34,6 +39,7 @@ const ConditionalLogicModal = ({ question, allQuestions, onSave, onClose }) => {
     value: "",
   };
   const [logic, setLogic] = useState(initialLogic);
+
   const potentialDependentFields = useMemo(() => {
     const currentIndex = allQuestions.findIndex(
       (q) => q.fieldId === question.fieldId
@@ -42,12 +48,14 @@ const ConditionalLogicModal = ({ question, allQuestions, onSave, onClose }) => {
       .slice(0, currentIndex)
       .filter((q) => q.type === "singleSelect");
   }, [question, allQuestions]);
+
   const dependentFieldOptions = useMemo(() => {
     const field = allQuestions.find(
       (q) => q.fieldId === logic.dependentFieldId
     );
     return field ? field.options : [];
   }, [logic.dependentFieldId, allQuestions]);
+
   const handleSave = () => {
     onSave(question.fieldId, {
       ...logic,
@@ -55,6 +63,7 @@ const ConditionalLogicModal = ({ question, allQuestions, onSave, onClose }) => {
     });
     onClose();
   };
+
   const handleRemoveLogic = () => {
     onSave(question.fieldId, {
       enabled: false,
@@ -72,8 +81,7 @@ const ConditionalLogicModal = ({ question, allQuestions, onSave, onClose }) => {
         <p className="modal-subtitle">Show this question only when...</p>
         <div className="modal-body">
           <div>
-            {" "}
-            <label>If question...</label>{" "}
+            <label>If question...</label>
             <select
               value={logic.dependentFieldId}
               onChange={(e) =>
@@ -84,67 +92,62 @@ const ConditionalLogicModal = ({ question, allQuestions, onSave, onClose }) => {
                 })
               }
             >
-              {" "}
-              <option value="">-- Select a question --</option>{" "}
+              <option value="">-- Select a question --</option>
               {potentialDependentFields.map((q) => (
                 <option key={q.fieldId} value={q.fieldId}>
                   {q.label}
                 </option>
-              ))}{" "}
-            </select>{" "}
+              ))}
+            </select>
           </div>
+
           {logic.dependentFieldId && (
             <>
-              {" "}
               <div>
-                {" "}
-                <label>...is...</label>{" "}
+                <label>...is...</label>
                 <select
                   value={logic.operator}
                   onChange={(e) =>
                     setLogic({ ...logic, operator: e.target.value })
                   }
                 >
-                  {" "}
-                  <option value="is">Is</option>{" "}
-                  <option value="isNot">Is Not</option>{" "}
-                </select>{" "}
-              </div>{" "}
+                  <option value="is">Is</option>
+                  <option value="isNot">Is Not</option>
+                </select>
+              </div>
+
               <div>
-                {" "}
-                <label>...the value...</label>{" "}
+                <label>...the value...</label>
                 <select
                   value={logic.value}
                   onChange={(e) =>
                     setLogic({ ...logic, value: e.target.value })
                   }
                 >
-                  {" "}
-                  <option value="">-- Select a value --</option>{" "}
+                  <option value="">-- Select a value --</option>
                   {dependentFieldOptions.map((opt) => (
                     <option key={opt.id} value={opt.name}>
                       {opt.name}
                     </option>
-                  ))}{" "}
-                </select>{" "}
-              </div>{" "}
+                  ))}
+                </select>
+              </div>
             </>
           )}
         </div>
+
         <div className="modal-actions">
-          {" "}
           <button onClick={handleRemoveLogic} className="btn btn-danger">
             Remove Logic
-          </button>{" "}
+          </button>
           <div>
-            {" "}
             <button onClick={onClose} className="btn btn-secondary">
               Cancel
-            </button>{" "}
+            </button>
             <button onClick={handleSave} className="btn btn-primary">
               Save Logic
-            </button>{" "}
-          </div>{" "}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -162,6 +165,7 @@ const FormBuilder = ({ user, onFormSaved }) => {
     "multipleSelects",
     "multipleAttachments",
   ];
+
   const [bases, setBases] = useState([]);
   const [loadingBases, setLoadingBases] = useState(false);
   const [selectedBase, setSelectedBase] = useState("");
@@ -170,7 +174,7 @@ const FormBuilder = ({ user, onFormSaved }) => {
   const [selectedTable, setSelectedTable] = useState("");
   const [fields, setFields] = useState([]);
   const [formName, setFormName] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  the [isSaving, setIsSaving] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [editingLogicFor, setEditingLogicFor] = useState(null);
   const [editingLabelFor, setEditingLabelFor] = useState(null);
@@ -192,6 +196,7 @@ const FormBuilder = ({ user, onFormSaved }) => {
     }
     setLoadingBases(false);
   };
+
   const fetchTables = async (baseId) => {
     if (!baseId) return;
     setLoadingTables(true);
@@ -209,11 +214,13 @@ const FormBuilder = ({ user, onFormSaved }) => {
     }
     setLoadingTables(false);
   };
+
   const handleBaseSelect = (e) => {
     const id = e.target.value;
     setSelectedBase(id);
     fetchTables(id);
   };
+
   const handleTableSelect = (e) => {
     const id = e.target.value;
     setSelectedTable(id);
@@ -226,6 +233,7 @@ const FormBuilder = ({ user, onFormSaved }) => {
     }
     setQuestions([]);
   };
+
   const handleFieldToggle = (field) => {
     setQuestions((prev) => {
       const isSelected = prev.some((q) => q.fieldId === field.id);
@@ -244,11 +252,13 @@ const FormBuilder = ({ user, onFormSaved }) => {
       }
     });
   };
+
   const updateQuestionLabel = (fieldId, newLabel) => {
     setQuestions((prev) =>
       prev.map((q) => (q.fieldId === fieldId ? { ...q, label: newLabel } : q))
     );
   };
+
   const updateQuestionLogic = (fieldId, logic) => {
     setQuestions((prev) =>
       prev.map((q) =>
@@ -256,6 +266,7 @@ const FormBuilder = ({ user, onFormSaved }) => {
       )
     );
   };
+
   const toggleQuestionRequired = (fieldId) => {
     setQuestions((prev) =>
       prev.map((q) =>
@@ -263,6 +274,7 @@ const FormBuilder = ({ user, onFormSaved }) => {
       )
     );
   };
+
   const handleSaveForm = async () => {
     if (!formName.trim() || questions.length === 0) {
       alert("Please provide a form name and select at least one field.");
@@ -292,10 +304,10 @@ const FormBuilder = ({ user, onFormSaved }) => {
       <p className="page-subtitle">
         Follow the steps to build and configure your form.
       </p>
+
       <div className="builder-steps">
         <div className="card">
-          {" "}
-          <h3>Step 1: Select a Base</h3>{" "}
+          <h3>Step 1: Select a Base</h3>
           {!bases.length ? (
             <button
               onClick={fetchBases}
@@ -313,12 +325,12 @@ const FormBuilder = ({ user, onFormSaved }) => {
                 </option>
               ))}
             </select>
-          )}{" "}
+          )}
         </div>
+
         {selectedBase && (
           <div className="card">
-            {" "}
-            <h3>Step 2: Select a Table</h3>{" "}
+            <h3>Step 2: Select a Table</h3>
             {loadingTables ? (
               <p>Loading tables...</p>
             ) : (
@@ -330,48 +342,41 @@ const FormBuilder = ({ user, onFormSaved }) => {
                   </option>
                 ))}
               </select>
-            )}{" "}
+            )}
           </div>
         )}
+
         {selectedTable && (
           <div className="card">
-            {" "}
-            <h3>Step 3: Build Your Form</h3>{" "}
+            <h3>Step 3: Build Your Form</h3>
             <div className="builder-columns">
-              {" "}
               <div>
-                {" "}
-                <h4>Available Fields</h4>{" "}
+                <h4>Available Fields</h4>
                 <div className="field-list">
-                  {" "}
                   {fields.map((field) => (
                     <div key={field.id} className="field-list-item">
-                      {" "}
                       <input
                         type="checkbox"
                         id={field.id}
                         checked={questions.some((q) => q.fieldId === field.id)}
                         onChange={() => handleFieldToggle(field)}
-                      />{" "}
+                      />
                       <label htmlFor={field.id}>
                         {field.name}{" "}
                         <span className="field-type">({field.type})</span>
-                      </label>{" "}
+                      </label>
                     </div>
-                  ))}{" "}
-                </div>{" "}
-              </div>{" "}
+                  ))}
+                </div>
+              </div>
+
               <div>
-                {" "}
-                <h4>Form Preview & Logic</h4>{" "}
+                <h4>Form Preview & Logic</h4>
                 <div className="preview-list">
-                  {" "}
                   {questions.length > 0 ? (
                     questions.map((q) => (
                       <div key={q.fieldId} className="preview-card">
-                        {" "}
                         <div className="preview-card-header">
-                          {" "}
                           {editingLabelFor === q.fieldId ? (
                             <input
                               type="text"
@@ -392,73 +397,70 @@ const FormBuilder = ({ user, onFormSaved }) => {
                                 <span className="required-asterisk">*</span>
                               )}
                             </strong>
-                          )}{" "}
+                          )}
                           <button
                             onClick={() => setEditingLabelFor(q.fieldId)}
                             className="btn-icon"
                           >
                             <EditIcon />
-                          </button>{" "}
-                        </div>{" "}
+                          </button>
+                        </div>
+
                         <div className="preview-card-footer">
-                          {" "}
                           <button
                             onClick={() => setEditingLogicFor(q)}
                             className="btn-link"
                           >
-                            {" "}
                             {q.conditionalLogic?.enabled
                               ? "Edit Logic"
-                              : "Add Logic"}{" "}
-                          </button>{" "}
+                              : "Add Logic"}
+                          </button>
                           <label>
-                            {" "}
                             <input
                               type="checkbox"
                               checked={q.isRequired}
                               onChange={() => toggleQuestionRequired(q.fieldId)}
-                            />{" "}
-                            Required{" "}
-                          </label>{" "}
-                        </div>{" "}
+                            />
+                            Required
+                          </label>
+                        </div>
                       </div>
                     ))
                   ) : (
                     <p className="empty-text">Add fields from the left.</p>
-                  )}{" "}
-                </div>{" "}
-              </div>{" "}
-            </div>{" "}
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
+
         {questions.length > 0 && (
           <div className="card">
-            {" "}
-            <h3>Step 4: Name & Save</h3>{" "}
+            <h3>Step 4: Name & Save</h3>
             <div className="form-group">
-              {" "}
-              <label htmlFor="formName">Form Name</label>{" "}
+              <label htmlFor="formName">Form Name</label>
               <input
                 type="text"
                 id="formName"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g., Job Application Form"
-              />{" "}
-            </div>{" "}
+              />
+            </div>
             <div className="form-actions">
-              {" "}
               <button
                 onClick={handleSaveForm}
                 disabled={isSaving}
                 className="btn btn-primary"
               >
                 {isSaving && <Spinner />} {isSaving ? "Saving..." : "Save Form"}
-              </button>{" "}
-            </div>{" "}
+              </button>
+            </div>
           </div>
         )}
       </div>
+
       {editingLogicFor && (
         <ConditionalLogicModal
           question={editingLogicFor}
@@ -480,6 +482,7 @@ const FormViewer = ({ formId, onBack }) => {
   const [responses, setResponses] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+
   useEffect(() => {
     const fetchForm = async () => {
       try {
@@ -497,9 +500,11 @@ const FormViewer = ({ formId, onBack }) => {
     };
     fetchForm();
   }, [formId]);
+
   const handleInputChange = (fieldId, value) => {
     setResponses((prev) => ({ ...prev, [fieldId]: value }));
   };
+
   const handlePreview = (e) => {
     e.preventDefault();
     for (const q of form.questions) {
@@ -510,6 +515,7 @@ const FormViewer = ({ formId, onBack }) => {
     }
     setIsPreviewing(true);
   };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
@@ -524,6 +530,7 @@ const FormViewer = ({ formId, onBack }) => {
     }
     setIsSubmitting(false);
   };
+
   const checkCondition = (logic) => {
     if (!logic || !logic.enabled) return true;
     const dependentValue = responses[logic.dependentFieldId];
@@ -556,12 +563,12 @@ const FormViewer = ({ formId, onBack }) => {
             .map((q) => (
               <div key={q.fieldId} className="form-group">
                 <label>
-                  {" "}
                   {q.label}{" "}
                   {q.isRequired && !isPreviewing && (
                     <span className="required-asterisk">*</span>
-                  )}{" "}
+                  )}
                 </label>
+
                 {isPreviewing ? (
                   <p className="preview-answer">
                     {responses[q.fieldId] || (
@@ -576,13 +583,12 @@ const FormViewer = ({ formId, onBack }) => {
                     }
                     required={q.isRequired}
                   >
-                    {" "}
-                    <option value="">-- Select --</option>{" "}
+                    <option value="">-- Select --</option>
                     {q.options.map((opt) => (
                       <option key={opt.id} value={opt.name}>
                         {opt.name}
                       </option>
-                    ))}{" "}
+                    ))}
                   </select>
                 ) : (
                   <input
@@ -596,16 +602,16 @@ const FormViewer = ({ formId, onBack }) => {
                 )}
               </div>
             ))}
+
           <div className="form-actions">
             {isPreviewing ? (
               <>
-                {" "}
                 <button
                   onClick={() => setIsPreviewing(false)}
                   className="btn btn-secondary"
                 >
                   Edit Answers
-                </button>{" "}
+                </button>
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting}
@@ -613,7 +619,7 @@ const FormViewer = ({ formId, onBack }) => {
                 >
                   {isSubmitting && <Spinner />}{" "}
                   {isSubmitting ? "Submitting..." : "Confirm & Submit"}
-                </button>{" "}
+                </button>
               </>
             ) : (
               <button onClick={handlePreview} className="btn btn-primary">
@@ -633,6 +639,7 @@ const FormViewer = ({ formId, onBack }) => {
 const Dashboard = ({ user, onLogout, onStartForm, onViewForm }) => {
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     if (!user?._id) return;
     const fetchUserForms = async () => {
@@ -648,6 +655,7 @@ const Dashboard = ({ user, onLogout, onStartForm, onViewForm }) => {
     };
     fetchUserForms();
   }, [user]);
+
   const copyToClipboard = (formId) => {
     const formUrl = `${window.location.origin}?formId=${formId}`;
     navigator.clipboard
@@ -655,6 +663,7 @@ const Dashboard = ({ user, onLogout, onStartForm, onViewForm }) => {
       .then(() => alert("Form link copied to clipboard!"))
       .catch((err) => console.error("Failed to copy link: ", err));
   };
+
   const handleExportPdf = (formId) => {
     window.open(
       `${API_BASE_URL}/api/forms/${formId}/responses/pdf`,
@@ -675,6 +684,7 @@ const Dashboard = ({ user, onLogout, onStartForm, onViewForm }) => {
           </button>
         </div>
       </header>
+
       <div className="dashboard-content">
         <h2>Your Forms</h2>
         <div className="card">
@@ -683,11 +693,11 @@ const Dashboard = ({ user, onLogout, onStartForm, onViewForm }) => {
           ) : forms.length > 0 ? (
             <table className="forms-table">
               <thead>
-                {" "}
                 <tr>
-                  {" "}
-                  <th>Form Name</th> <th>Created On</th> <th>Actions</th>{" "}
-                </tr>{" "}
+                  <th>Form Name</th>
+                  <th>Created On</th>
+                  <th>Actions</th>
+                </tr>
               </thead>
               <tbody>
                 {forms.map((form) => (
@@ -732,21 +742,20 @@ const Dashboard = ({ user, onLogout, onStartForm, onViewForm }) => {
 // ====================================================================
 const LoginPage = () => {
   const handleLogin = () => {
+    console.log("API_BASE_URL", API_BASE_URL);
     window.location.href = `${API_BASE_URL}/api/auth/airtable`;
   };
   return (
     <div className="loading-screen">
-      {" "}
       <div className="login-card">
-        {" "}
-        <h2 className="page-title">Form Builder for Airtable</h2>{" "}
+        <h2 className="page-title">Form Builder for Airtable</h2>
         <p className="page-subtitle">
           Connect your Airtable account to create custom forms in seconds.
-        </p>{" "}
+        </p>
         <button onClick={handleLogin} className="btn btn-primary btn-large">
           Log in with Airtable
-        </button>{" "}
-      </div>{" "}
+        </button>
+      </div>
     </div>
   );
 };
@@ -756,6 +765,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState("dashboard");
   const [currentFormId, setCurrentFormId] = useState(null);
+
   useEffect(() => {
     const fetchUser = async () => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -766,6 +776,7 @@ function App() {
         setLoading(false);
         return;
       }
+
       const storedUserId = localStorage.getItem("airtableFormBuilderUserId");
       if (storedUserId) {
         try {
@@ -798,6 +809,7 @@ function App() {
     };
     fetchUser();
   }, []);
+
   const handleLogout = () => {
     localStorage.removeItem("airtableFormBuilderUserId");
     setUser(null);
@@ -834,18 +846,30 @@ function App() {
     );
   };
 
+  // ✅ NEW: Router wrapper with two extra routes; everything else stays the same
   return (
-    <div className="app-container">
-      {loading ? (
-        <div className="loading-screen">
-          <div>Loading Application...</div>
-        </div>
-      ) : user ? (
-        renderContent()
-      ) : (
-        <LoginPage />
-      )}
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route
+          path="/*"
+          element={
+            <div className="app-container">
+              {loading ? (
+                <div className="loading-screen">
+                  <div>Loading Application...</div>
+                </div>
+              ) : user ? (
+                renderContent()
+              ) : (
+                <LoginPage />
+              )}
+            </div>
+          }
+        />
+      </Routes>
+    </Router>
   );
 }
 
