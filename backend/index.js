@@ -9,7 +9,7 @@ const connectDB = require('./db');
 const User = require('./models/userModel');
 const Form = require('./models/formModel');
 
-// Connect to the database
+// Connect to DB
 connectDB();
 
 const app = express();
@@ -29,7 +29,12 @@ function sha256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest();
 }
 
-// Token refresh logic
+const sanitizeText = (text) => {
+  if (text === null || typeof text === 'undefined') return '';
+  return String(text).replace(/[^\u0000-\u00FF]/g, "?");
+};
+
+// --- Token Refresh Logic ---
 const getAirtableToken = async (userId) => {
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
@@ -43,14 +48,17 @@ const getAirtableToken = async (userId) => {
     if (error.response && error.response.status === 401) {
       console.log('Access token expired. Refreshing token...');
       try {
-        const tokenResponse = await axios.post('https://airtable.com/oauth2/v1/token',
+        const tokenResponse = await axios.post(
+          'https://airtable.com/oauth2/v1/token',
           new URLSearchParams({
             grant_type: 'refresh_token',
             refresh_token: user.refreshToken,
           }),
           {
             headers: {
-              'Authorization': `Basic ${Buffer.from(`${process.env.AIRTABLE_CLIENT_ID}:${process.env.AIRTABLE_CLIENT_SECRET}`).toString('base64')}`,
+              'Authorization': `Basic ${Buffer.from(
+                `${process.env.AIRTABLE_CLIENT_ID}:${process.env.AIRTABLE_CLIENT_SECRET}`
+              ).toString('base64')}`,
               'Content-Type': 'application/x-www-form-urlencoded',
             },
           }
@@ -62,17 +70,15 @@ const getAirtableToken = async (userId) => {
         console.log('Token refreshed and updated in DB.');
         return newAccessToken;
       } catch (refreshError) {
-        console.error('Failed to refresh token:', refreshError.response ? refreshError.response.data : refreshError.message);
+        console.error(
+          'Failed to refresh token:',
+          refreshError.response ? refreshError.response.data : refreshError.message
+        );
         throw new Error('Could not refresh authentication token.');
       }
     }
     throw error;
   }
-};
-
-const sanitizeText = (text) => {
-  if (text === null || typeof text === 'undefined') return '';
-  return String(text).replace(/[^\u0000-\u00FF]/g, "?");
 };
 
 // --- AUTH ROUTES ---
@@ -104,7 +110,8 @@ app.get('/api/auth/airtable/callback', async (req, res) => {
   delete sessionStore[state];
 
   try {
-    const tokenResponse = await axios.post('https://airtable.com/oauth2/v1/token',
+    const tokenResponse = await axios.post(
+      'https://airtable.com/oauth2/v1/token',
       new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
@@ -113,7 +120,9 @@ app.get('/api/auth/airtable/callback', async (req, res) => {
       }),
       {
         headers: {
-          'Authorization': `Basic ${Buffer.from(`${process.env.AIRTABLE_CLIENT_ID}:${process.env.AIRTABLE_CLIENT_SECRET}`).toString('base64')}`,
+          'Authorization': `Basic ${Buffer.from(
+            `${process.env.AIRTABLE_CLIENT_ID}:${process.env.AIRTABLE_CLIENT_SECRET}`
+          ).toString('base64')}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
       }
@@ -140,6 +149,7 @@ app.get('/api/auth/airtable/callback', async (req, res) => {
   }
 });
 
+// --- USERS ---
 app.get('/api/users/:id', async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-accessToken -refreshToken');
@@ -215,18 +225,38 @@ app.post('/api/forms/:formId/submit', async (req, res) => {
     const { formId } = req.params;
     const submissionData = req.body;
     const form = await Form.findById(formId);
-    if (!form) {
-      return res.status(404).json({ message: 'Form not found' });
-    }
+    if (!form) return res.status(404).json({ message: 'Form not found' });
+
     const accessToken = await getAirtableToken(form.creatorId);
-    const airtablePayload = { fields: submissionData };
+
+    // ✅ Convert attachments (string → {url})
+    const airtableFields = {};
+    for (const key in submissionData) {
+      if (key.toLowerCase().includes("attachment") || key.toLowerCase().includes("logo")) {
+        if (typeof submissionData[key] === "string") {
+          airtableFields[key] = [{ url: submissionData[key] }];
+        } else if (Array.isArray(submissionData[key])) {
+          airtableFields[key] = submissionData[key].map((item) =>
+            typeof item === "string" ? { url: item } : item
+          );
+        } else {
+          airtableFields[key] = submissionData[key];
+        }
+      } else {
+        airtableFields[key] = submissionData[key];
+      }
+    }
+
+    const airtablePayload = { fields: airtableFields };
     const url = `https://api.airtable.com/v0/${form.airtableBaseId}/${form.airtableTableId}`;
+
     await axios.post(url, airtablePayload, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
     });
+
     res.status(200).json({ message: 'Form submitted successfully!' });
   } catch (error) {
     const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
@@ -267,7 +297,12 @@ app.get('/api/forms/:formId/responses/pdf', async (req, res) => {
             page = pdfDoc.addPage();
             y = height - 50;
           }
-          const fieldValue = record.fields[fieldName];
+
+          let fieldValue = record.fields[fieldName];
+          if (Array.isArray(fieldValue) && fieldValue.length > 0 && fieldValue[0].url) {
+            fieldValue = fieldValue.map((att) => att.url).join(", ");
+          }
+
           const line = `${sanitizeText(fieldName)}: ${sanitizeText(fieldValue)}`;
           page.drawText(line, { x: 50, y, font, size: fontSize, color: rgb(0, 0, 0) });
           y -= 20;
@@ -282,7 +317,6 @@ app.get('/api/forms/:formId/responses/pdf', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeText(form.formName)}-responses.pdf"`);
     res.setHeader('Content-Type', 'application/pdf');
     res.send(Buffer.from(pdfBytes));
-
   } catch (error) {
     const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
     console.error('Error generating PDF:', errorMessage);
@@ -290,6 +324,7 @@ app.get('/api/forms/:formId/responses/pdf', async (req, res) => {
   }
 });
 
+// --- START SERVER ---
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
