@@ -174,7 +174,7 @@ const FormBuilder = ({ user, onFormSaved }) => {
   const [selectedTable, setSelectedTable] = useState("");
   const [fields, setFields] = useState([]);
   const [formName, setFormName] = useState("");
-  the [isSaving, setIsSaving] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [editingLogicFor, setEditingLogicFor] = useState(null);
   const [editingLabelFor, setEditingLabelFor] = useState(null);
